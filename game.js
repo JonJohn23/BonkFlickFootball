@@ -16,18 +16,36 @@ const TABLE = {
   friction: 0.986,
   wallBounce: 0.86,
   goalWidth: 20,
-  puckRadius: 2.1,
   ballRadius: 1.15,
   pegRadius: 0.72,
+  ballGrabRadius: 2.6,
+  maxDrag: 14,
+  flickScale: 0.15,
 };
+
+// Tune only the left-side peg coordinates; the right side mirrors automatically.
+const LEFT_PEG_LAYOUT = [
+  [-34.5, -4],
+  [-34.5, 4],
+  [-30.5, 0],
+  [-27.5, -5],
+  [-27.5, 5],
+  [-23, -8],
+  [-23, 0],
+  [-23, 8],
+  [-17.5, -6],
+  [-17.5, 6],
+  [-14, 0],
+];
 
 const state = {
   turn: "blue",
   score: { blue: 0, red: 0 },
   dragging: null,
   gameOver: false,
-  actors: [],
+  ball: null,
   pegs: [],
+  waitingForStop: false,
 };
 
 const scene = new THREE.Scene();
@@ -248,34 +266,24 @@ function buildBoard() {
   addGoal(false);
 }
 
-function toWorld(px, pz) {
-  return { x: px - TABLE.width / 2, z: pz - TABLE.height / 2 };
+function currentTurnName() {
+  return state.turn[0].toUpperCase() + state.turn.slice(1);
 }
 
-function createActor(type, px, pz, owner = null) {
-  const { x, z } = toWorld(px, pz);
-  const radius = type === "ball" ? TABLE.ballRadius : TABLE.puckRadius;
+function createBall(x = 0, z = 0) {
+  const mesh = new THREE.Mesh(
+    new THREE.SphereGeometry(TABLE.ballRadius, 30, 20),
+    new THREE.MeshStandardMaterial({ color: "#fbf2c9", roughness: 0.22 }),
+  );
 
-  const mesh =
-    type === "ball"
-      ? new THREE.Mesh(
-          new THREE.SphereGeometry(radius, 30, 20),
-          new THREE.MeshStandardMaterial({ color: "#fbf2c9", roughness: 0.22 }),
-        )
-      : new THREE.Mesh(
-          new THREE.CylinderGeometry(radius, radius, 1.5, 34),
-          new THREE.MeshStandardMaterial({ color: owner === "blue" ? "#4ea7ff" : "#ff6666", roughness: 0.35 }),
-        );
-
-  mesh.position.set(x, type === "ball" ? radius : 0.75, z);
+  mesh.position.set(x, TABLE.ballRadius, z);
   mesh.castShadow = true;
   mesh.receiveShadow = true;
   scene.add(mesh);
-  return { type, owner, mesh, x, z, vx: 0, vz: 0, radius };
+  return { mesh, x, z, vx: 0, vz: 0, radius: TABLE.ballRadius };
 }
 
-function createPeg(px, pz) {
-  const { x, z } = toWorld(px, pz);
+function createPeg(x, z) {
   const mesh = new THREE.Mesh(
     new THREE.CylinderGeometry(TABLE.pegRadius, TABLE.pegRadius, 1.45, 20),
     new THREE.MeshStandardMaterial({ color: "#f6f6f6", roughness: 0.3 }),
@@ -290,36 +298,15 @@ function seedPegs() {
   for (const peg of state.pegs) scene.remove(peg.mesh);
   state.pegs = [];
 
-  // Approximate Binho layout and mirror it for both halves.
-  const leftHalf = [
-    [15.5, 28],
-    [18.5, 23],
-    [18.5, 33],
-    [23, 20],
-    [23, 28],
-    [23, 36],
-    [28.5, 22],
-    [28.5, 34],
-    [32, 28],
-    [11.5, 24],
-    [11.5, 32],
-  ];
-
-  const mirrored = leftHalf.map(([x, z]) => [TABLE.width - x, z]);
-  for (const pegPos of [...leftHalf, ...mirrored]) createPeg(pegPos[0], pegPos[1]);
+  for (const [x, z] of LEFT_PEG_LAYOUT) {
+    createPeg(x, z);
+    createPeg(-x, z);
+  }
 }
 
-function seedActors() {
-  for (const actor of state.actors) scene.remove(actor.mesh);
-  state.actors = [
-    createActor("ball", TABLE.width / 2, TABLE.height / 2),
-    createActor("puck", 10, TABLE.height * 0.33, "blue"),
-    createActor("puck", 10, TABLE.height * 0.5, "blue"),
-    createActor("puck", 10, TABLE.height * 0.67, "blue"),
-    createActor("puck", TABLE.width - 10, TABLE.height * 0.33, "red"),
-    createActor("puck", TABLE.width - 10, TABLE.height * 0.5, "red"),
-    createActor("puck", TABLE.width - 10, TABLE.height * 0.67, "red"),
-  ];
+function seedBall() {
+  if (state.ball) scene.remove(state.ball.mesh);
+  state.ball = createBall();
 }
 
 function updateStatus(text) {
@@ -329,15 +316,16 @@ function updateStatus(text) {
 function updateHud() {
   scoreBlueEl.textContent = state.score.blue;
   scoreRedEl.textContent = state.score.red;
-  turnLabelEl.textContent = state.turn[0].toUpperCase() + state.turn.slice(1);
+  turnLabelEl.textContent = currentTurnName();
 }
 
 function resetTurn() {
-  seedActors();
+  seedBall();
   seedPegs();
   if (state.dragging?.arrow) scene.remove(state.dragging.arrow);
   state.dragging = null;
-  updateStatus(`Drag from your ${state.turn} puck, then release to flick.`);
+  state.waitingForStop = false;
+  updateStatus(`${currentTurnName()} to flick the ball.`);
 }
 
 function resetMatch() {
@@ -352,30 +340,36 @@ function resetMatch() {
 function switchTurn() {
   state.turn = state.turn === "blue" ? "red" : "blue";
   updateHud();
-  updateStatus(`Turn changed. ${turnLabelEl.textContent} to flick.`);
+  updateStatus(`${currentTurnName()} to flick the ball.`);
 }
 
 function allStopped() {
-  return state.actors.every((a) => Math.hypot(a.vx, a.vz) < 0.03);
+  return !state.ball || Math.hypot(state.ball.vx, state.ball.vz) < 0.03;
 }
 
 function goalCheck() {
-  const ball = state.actors.find((a) => a.type === "ball");
+  const ball = state.ball;
+  if (!ball) return false;
   const inGoalZ = Math.abs(ball.z) <= TABLE.goalWidth / 2;
 
   if (ball.x < -TABLE.width / 2 + ball.radius && inGoalZ) {
     state.score.red += 1;
     updateStatus("Red scores!");
     afterGoal();
+    return true;
   } else if (ball.x > TABLE.width / 2 - ball.radius && inGoalZ) {
     state.score.blue += 1;
     updateStatus("Blue scores!");
     afterGoal();
+    return true;
   }
+
+  return false;
 }
 
 function afterGoal() {
   updateHud();
+  state.waitingForStop = false;
   if (state.score.blue >= 5 || state.score.red >= 5) {
     state.gameOver = true;
     const winner = state.score.blue > state.score.red ? "Blue" : "Red";
@@ -386,57 +380,26 @@ function afterGoal() {
   setTimeout(resetTurn, 550);
 }
 
-function resolveWall(actor) {
-  const inGoalZ = Math.abs(actor.z) <= TABLE.goalWidth / 2;
-  if (actor.type !== "ball" || !inGoalZ) {
-    if (actor.x - actor.radius < -TABLE.width / 2) {
-      actor.x = -TABLE.width / 2 + actor.radius;
-      actor.vx *= -TABLE.wallBounce;
+function resolveWall(ball) {
+  const inGoalZ = Math.abs(ball.z) <= TABLE.goalWidth / 2;
+  if (!inGoalZ) {
+    if (ball.x - ball.radius < -TABLE.width / 2) {
+      ball.x = -TABLE.width / 2 + ball.radius;
+      ball.vx *= -TABLE.wallBounce;
     }
-    if (actor.x + actor.radius > TABLE.width / 2) {
-      actor.x = TABLE.width / 2 - actor.radius;
-      actor.vx *= -TABLE.wallBounce;
+    if (ball.x + ball.radius > TABLE.width / 2) {
+      ball.x = TABLE.width / 2 - ball.radius;
+      ball.vx *= -TABLE.wallBounce;
     }
   }
-  if (actor.z - actor.radius < -TABLE.height / 2) {
-    actor.z = -TABLE.height / 2 + actor.radius;
-    actor.vz *= -TABLE.wallBounce;
+  if (ball.z - ball.radius < -TABLE.height / 2) {
+    ball.z = -TABLE.height / 2 + ball.radius;
+    ball.vz *= -TABLE.wallBounce;
   }
-  if (actor.z + actor.radius > TABLE.height / 2) {
-    actor.z = TABLE.height / 2 - actor.radius;
-    actor.vz *= -TABLE.wallBounce;
+  if (ball.z + ball.radius > TABLE.height / 2) {
+    ball.z = TABLE.height / 2 - ball.radius;
+    ball.vz *= -TABLE.wallBounce;
   }
-}
-
-function resolveCircleCollision(a, b, restitution = 0.91) {
-  const dx = b.x - a.x;
-  const dz = b.z - a.z;
-  const dist = Math.hypot(dx, dz);
-  const minDist = a.radius + b.radius;
-  if (dist === 0 || dist >= minDist) return;
-
-  const nx = dx / dist;
-  const nz = dz / dist;
-  const overlap = minDist - dist;
-
-  a.x -= nx * (overlap / 2);
-  a.z -= nz * (overlap / 2);
-  b.x += nx * (overlap / 2);
-  b.z += nz * (overlap / 2);
-
-  const rvx = b.vx - a.vx;
-  const rvz = b.vz - a.vz;
-  const sep = rvx * nx + rvz * nz;
-  if (sep > 0) return;
-
-  const impulse = (-(1 + restitution) * sep) / 2;
-  const ix = impulse * nx;
-  const iz = impulse * nz;
-
-  a.vx -= ix;
-  a.vz -= iz;
-  b.vx += ix;
-  b.vz += iz;
 }
 
 function resolvePegCollision(actor, peg) {
@@ -461,40 +424,35 @@ function resolvePegCollision(actor, peg) {
 }
 
 function stepPhysics() {
-  for (const actor of state.actors) {
-    actor.x += actor.vx;
-    actor.z += actor.vz;
-    actor.vx *= TABLE.friction;
-    actor.vz *= TABLE.friction;
+  const ball = state.ball;
+  if (!ball) return;
 
-    if (Math.abs(actor.vx) < 0.008) actor.vx = 0;
-    if (Math.abs(actor.vz) < 0.008) actor.vz = 0;
+  ball.x += ball.vx;
+  ball.z += ball.vz;
+  ball.vx *= TABLE.friction;
+  ball.vz *= TABLE.friction;
 
-    resolveWall(actor);
-    for (const peg of state.pegs) resolvePegCollision(actor, peg);
+  if (Math.abs(ball.vx) < 0.008) ball.vx = 0;
+  if (Math.abs(ball.vz) < 0.008) ball.vz = 0;
+
+  resolveWall(ball);
+  for (const peg of state.pegs) resolvePegCollision(ball, peg);
+
+  if (goalCheck()) return;
+
+  if (state.waitingForStop && allStopped() && !state.gameOver) {
+    state.waitingForStop = false;
+    switchTurn();
   }
-
-  for (let i = 0; i < state.actors.length; i += 1) {
-    for (let j = i + 1; j < state.actors.length; j += 1) {
-      resolveCircleCollision(state.actors[i], state.actors[j]);
-    }
-  }
-
-  goalCheck();
-  if (!state.dragging && allStopped() && !state.gameOver) switchTurn();
 }
 
 function syncMeshes() {
-  for (const actor of state.actors) {
-    actor.mesh.position.x = actor.x;
-    actor.mesh.position.z = actor.z;
-    if (actor.type === "ball") {
-      actor.mesh.rotation.x += actor.vz * 0.03;
-      actor.mesh.rotation.z -= actor.vx * 0.03;
-    } else {
-      actor.mesh.rotation.y += Math.hypot(actor.vx, actor.vz) * 0.03;
-    }
-  }
+  if (!state.ball) return;
+
+  state.ball.mesh.position.x = state.ball.x;
+  state.ball.mesh.position.z = state.ball.z;
+  state.ball.mesh.rotation.x += state.ball.vz * 0.03;
+  state.ball.mesh.rotation.z -= state.ball.vx * 0.03;
 }
 
 function resize() {
@@ -513,8 +471,9 @@ function pointerToPlane(evt) {
   return raycaster.ray.intersectPlane(dragPlane, dragHit) ? dragHit.clone() : null;
 }
 
-function actorAtPoint(point) {
-  return state.actors.find((a) => a.type === "puck" && a.owner === state.turn && Math.hypot(point.x - a.x, point.z - a.z) <= a.radius);
+function ballAtPoint(point) {
+  if (!state.ball) return null;
+  return Math.hypot(point.x - state.ball.x, point.z - state.ball.z) <= TABLE.ballGrabRadius ? state.ball : null;
 }
 
 function tick() {
@@ -522,18 +481,19 @@ function tick() {
   syncMeshes();
 
   if (state.dragging) {
-    const { actor, point } = state.dragging;
-    const dx = actor.x - point.x;
-    const dz = actor.z - point.z;
-    const length = Math.min(Math.hypot(dx, dz), 12);
+    const { ball, point } = state.dragging;
+    const dx = ball.x - point.x;
+    const dz = ball.z - point.z;
+    const length = Math.min(Math.hypot(dx, dz), TABLE.maxDrag);
 
     if (!state.dragging.arrow) {
-      state.dragging.arrow = new THREE.ArrowHelper(new THREE.Vector3(1, 0, 0), new THREE.Vector3(actor.x, 1.6, actor.z), 1, 0xffea8f, 1.2, 0.8);
+      const arrowColor = state.turn === "blue" ? 0x4ea7ff : 0xff6666;
+      state.dragging.arrow = new THREE.ArrowHelper(new THREE.Vector3(1, 0, 0), new THREE.Vector3(ball.x, 1.6, ball.z), 1, arrowColor, 1.2, 0.8);
       scene.add(state.dragging.arrow);
     }
 
     const dir = new THREE.Vector3(dx || 0.001, 0, dz || 0.001).normalize();
-    state.dragging.arrow.position.set(actor.x, 1.6, actor.z);
+    state.dragging.arrow.position.set(ball.x, 1.6, ball.z);
     state.dragging.arrow.setDirection(dir);
     state.dragging.arrow.setLength(length, 1.2, 0.8);
   }
@@ -545,15 +505,15 @@ function tick() {
 window.addEventListener("resize", resize);
 
 renderer.domElement.addEventListener("pointerdown", (evt) => {
-  if (state.gameOver || !allStopped()) return;
+  if (state.gameOver || state.waitingForStop || !allStopped()) return;
   const point = pointerToPlane(evt);
   if (!point) return;
 
-  const actor = actorAtPoint(point);
-  if (!actor) return;
+  const ball = ballAtPoint(point);
+  if (!ball) return;
 
-  state.dragging = { actor, point };
-  updateStatus("Release to flick.");
+  state.dragging = { ball, point };
+  updateStatus(`${currentTurnName()} is aiming the ball.`);
 });
 
 renderer.domElement.addEventListener("pointermove", (evt) => {
@@ -566,18 +526,23 @@ renderer.domElement.addEventListener("pointermove", (evt) => {
 renderer.domElement.addEventListener("pointerup", () => {
   if (!state.dragging) return;
 
-  const { actor, point, arrow } = state.dragging;
-  const dx = actor.x - point.x;
-  const dz = actor.z - point.z;
-  const strength = Math.min(Math.hypot(dx, dz), 14);
-  const scale = 0.15;
-
-  actor.vx += dx * scale;
-  actor.vz += dz * scale;
-  updateStatus(`Flick launched with power ${Math.round((strength / 14) * 100)}%.`);
+  const { ball, point, arrow } = state.dragging;
+  const dx = ball.x - point.x;
+  const dz = ball.z - point.z;
+  const strength = Math.min(Math.hypot(dx, dz), TABLE.maxDrag);
 
   if (arrow) scene.remove(arrow);
   state.dragging = null;
+
+  if (strength < 0.35) {
+    updateStatus(`${currentTurnName()} to flick the ball.`);
+    return;
+  }
+
+  ball.vx += dx * TABLE.flickScale;
+  ball.vz += dz * TABLE.flickScale;
+  state.waitingForStop = true;
+  updateStatus(`${currentTurnName()} flicked the ball at ${Math.round((strength / TABLE.maxDrag) * 100)}% power.`);
 });
 
 resetTurnBtn.addEventListener("click", resetTurn);

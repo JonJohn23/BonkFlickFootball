@@ -1,6 +1,6 @@
 # Bonk Flick Football 3D
 
-A browser game inspired by tabletop flick football (like Binho), rendered in 3D with a Binho-style board: proper field markings, goals, elastic-band rails, and mirrored peg layout.
+A browser game inspired by tabletop flick football (like Binho), rendered in 3D with a Binho-style board: proper field markings, goals, elastic-band rails, and a mirrored peg layout driven from one manual side.
 
 ## Run locally
 
@@ -16,7 +16,7 @@ Then open <http://localhost:4173>.
 
 ## Controls
 
-- Click + drag **from your current turn's puck** to aim and set power.
-- Release to flick.
-- Use pegs for bank shots and blockers.
+- Click + drag **from the ball** to aim and set power.
+- Release to flick the ball directly.
+- Pegs are authored on one side of the table and mirrored automatically.
 - First player to 5 goals wins.
