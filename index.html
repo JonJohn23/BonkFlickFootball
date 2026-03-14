@@ -3,50 +3,93 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Bonk Flick Football 3D</title>
+    <meta name="theme-color" content="#111314" />
+    <title>Binho Digital</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@600;700&family=Sora:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
-    <main class="layout">
-      <section class="hud card">
-        <h1>Bonk Flick Football 3D</h1>
-        <p class="subtitle">A 3D tabletop-style flick soccer game inspired by Binho.</p>
+    <main class="app-shell">
+      <section class="topbar panel">
+        <div class="brand-block">
+          <p class="eyebrow">Tabletop Flick Football</p>
+          <h1>Binho Digital</h1>
 
-        <div class="scoreboard">
-          <div>
-            <h2>Blue</h2>
-            <p id="score-blue">0</p>
-          </div>
-          <div>
-            <h2>Red</h2>
-            <p id="score-red">0</p>
+          <div class="mode-switch" aria-label="Game modes">
+            <button id="mode-practice" class="chip is-active" data-mode="practice" type="button">Practice</button>
+            <button id="mode-match" class="chip" data-mode="match" type="button">Match</button>
+            <button id="mode-edit" class="chip" data-mode="edit" type="button">Edit Pegs</button>
           </div>
         </div>
 
-        <p><strong>Turn:</strong> <span id="turn-label">Blue</span></p>
-        <p><strong>Status:</strong> <span id="status-label">Blue to flick the ball.</span></p>
+        <div class="score-block">
+          <div id="player-one" class="score-card">
+            <p class="score-label">Player 1</p>
+            <p id="score-p1" class="score-value score-value-p1">0</p>
+          </div>
 
-        <div class="actions">
-          <button id="reset-turn">Reset Turn</button>
-          <button id="reset-match">New Match</button>
+          <div id="mode-indicator" class="versus-mark">VS</div>
+
+          <div id="player-two" class="score-card">
+            <p class="score-label">Player 2</p>
+            <p id="score-p2" class="score-value score-value-p2">0</p>
+          </div>
+
+          <button id="reset-game" class="reset-button" type="button" aria-label="Reset game">Reset</button>
         </div>
-
-        <details>
-          <summary>How to play</summary>
-          <ul>
-            <li>Players take turns flicking the ball directly.</li>
-            <li>Drag back from the ball to set direction and power, then release.</li>
-            <li>Pegs are defined on the left side and mirrored exactly across midfield.</li>
-            <li>Goals, field lines, and elastic band rails are modeled in 3D. First to 5 wins.</li>
-          </ul>
-        </details>
       </section>
 
-      <section class="table card">
-        <div id="game" aria-label="3D flick football table"></div>
+      <section class="board-section">
+        <div class="board-frame">
+          <div id="board" class="board" aria-label="Binho digital board">
+            <svg class="field-lines" viewBox="0 0 800 500" aria-hidden="true">
+              <defs>
+                <pattern id="editor-grid-pattern" width="40" height="40" patternUnits="userSpaceOnUse">
+                  <path d="M 40 0 L 0 0 0 40" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="1" />
+                </pattern>
+              </defs>
+
+              <rect class="editor-grid" width="800" height="500" fill="url(#editor-grid-pattern)" />
+
+              <line x1="400" y1="0" x2="400" y2="500" class="field-mark" />
+              <circle cx="400" cy="250" r="70" class="field-mark" />
+
+              <rect x="0" y="125" width="120" height="250" class="field-mark" />
+              <path d="M 120 185 Q 160 250 120 315" class="field-mark" />
+
+              <rect x="680" y="125" width="120" height="250" class="field-mark" />
+              <path d="M 680 185 Q 640 250 680 315" class="field-mark" />
+            </svg>
+
+            <div id="matter-host" class="matter-host" aria-hidden="true"></div>
+            <div id="editor-overlay" class="overlay editor-overlay" aria-hidden="true"></div>
+            <div id="drag-overlay" class="overlay drag-overlay" aria-hidden="true"></div>
+
+            <div id="goal-overlay" class="goal-overlay is-hidden" aria-live="polite">
+              <div class="goal-banner">
+                <h2 id="goal-text" class="goal-text">Player 1 Scores!</h2>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="statusbar panel">
+        <div class="status-copy">
+          <span id="status-light" class="status-light is-ready"></span>
+          <span id="status-text" class="status-text">Ready to Flick</span>
+        </div>
+
+        <p id="status-note" class="status-note">Drag ball back to aim.</p>
       </section>
     </main>
 
-    <script type="module" src="game.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/matter-js@0.20.0/build/matter.min.js"></script>
+    <script defer src="game.js"></script>
   </body>
 </html>

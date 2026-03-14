@@ -1,22 +1,28 @@
-# Bonk Flick Football 3D
+# Binho Digital
 
-A browser game inspired by tabletop flick football (like Binho), rendered in 3D with a Binho-style board: proper field markings, goals, elastic-band rails, and a mirrored peg layout driven from one manual side.
+A browser prototype of tabletop flick football built with Matter.js. The board uses a direct ball flick, mirrored peg symmetry, and a built-in peg editor so you can tune one side and have the other side stay exact.
 
 ## Run locally
 
-Serve the folder with a static server:
+Serve the folder with any static server:
 
 ```bash
-python3 -m http.server 4173
+python -m http.server 4173
 ```
 
 Then open <http://localhost:4173>.
 
-> Note: `game.js` imports Three.js from a CDN, so internet access is required when loading the game.
+> Note: the page loads Matter.js and fonts from public CDNs, so internet access is required.
+
+## Modes
+
+- `Practice`: flick freely without turn switching.
+- `Match`: alternate turns between Player 1 and Player 2 after the ball stops.
+- `Edit Pegs`: drag only the gold left-side pegs; the gray right-side pegs mirror automatically.
 
 ## Controls
 
-- Click + drag **from the ball** to aim and set power.
-- Release to flick the ball directly.
-- Pegs are authored on one side of the table and mirrored automatically.
-- First player to 5 goals wins.
+- Drag back from the ball and release to flick.
+- Click `Edit Pegs` to adjust the left-side peg positions.
+- Click `Save Layout` to keep that mirrored peg layout for future sessions.
+- Click `Reset` to reset the score, ball, and turn state.
