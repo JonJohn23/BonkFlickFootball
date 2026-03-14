@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Bonk Flick Football 3D</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="layout">
+      <section class="hud card">
+        <h1>Bonk Flick Football 3D</h1>
+        <p class="subtitle">A 3D tabletop-style flick soccer game inspired by Binho.</p>
+
+        <div class="scoreboard">
+          <div>
+            <h2>Blue</h2>
+            <p id="score-blue">0</p>
+          </div>
+          <div>
+            <h2>Red</h2>
+            <p id="score-red">0</p>
+          </div>
+        </div>
+
+        <p><strong>Turn:</strong> <span id="turn-label">Blue</span></p>
+        <p><strong>Status:</strong> <span id="status-label">Drag from your puck, then release to flick.</span></p>
+
+        <div class="actions">
+          <button id="reset-turn">Reset Turn</button>
+          <button id="reset-match">New Match</button>
+        </div>
+
+        <details>
+          <summary>How to play</summary>
+          <ul>
+            <li>Each player has 3 pucks and takes turns flicking one puck.</li>
+            <li>Drag from one of your pucks to set direction and power.</li>
+            <li>Peg positions are arranged to mimic a Binho-style board layout.</li>
+            <li>Goals, field lines, and elastic band rails are modeled in 3D. First to 5 wins.</li>
+          </ul>
+        </details>
+      </section>
+
+      <section class="table card">
+        <div id="game" aria-label="3D flick football table"></div>
+      </section>
+    </main>
+
+    <script type="module" src="game.js"></script>
+  </body>
+</html>
